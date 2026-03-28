@@ -1,11 +1,13 @@
 ---
-- name: Atelier Ansible dans GitHub Codespaces - version durcie
+- name: Atelier Ansible dans GitHub Codespaces - version durcie avec remédiation
   hosts: local
   become: true
   gather_facts: true
 
   vars:
     page_dest: /var/www/html/index.html
+    yarn_repo_file: /etc/apt/sources.list.d/yarn.list
+    yarn_repo_disabled_file: /etc/apt/sources.list.d/yarn.list.disabled
 
   tasks:
     - name: Afficher le système cible
@@ -15,58 +17,26 @@
           - "OS : {{ ansible_distribution }} {{ ansible_distribution_version }}"
           - "Python : {{ ansible_python.executable | default('inconnu') }}"
 
-    - name: Rechercher des dépôts Yarn dans la configuration APT
-      shell: |
-        grep -R -n "yarnpkg" /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null || true
-      register: yarn_repo_check
-      changed_when: false
+    - name: Vérifier si le dépôt Yarn existe
+      stat:
+        path: "{{ yarn_repo_file }}"
+      register: yarn_repo_stat
 
-    - name: Afficher un avertissement si un dépôt Yarn est détecté
+    - name: Afficher un avertissement si le dépôt Yarn est présent
       debug:
         msg:
-          - "Attention : un dépôt Yarn a été détecté dans la configuration APT."
-          - "Cela peut provoquer un échec de apt update si la clé GPG est absente."
-          - "{{ yarn_repo_check.stdout_lines }}"
-      when: yarn_repo_check.stdout | length > 0
+          - "Un dépôt Yarn a été détecté : {{ yarn_repo_file }}"
+          - "Il peut provoquer un échec de apt update si sa clé GPG est absente."
+      when: yarn_repo_stat.stat.exists
 
-    - name: Tester la mise à jour du cache APT
-      command: apt-get update
-      register: apt_update_result
-      changed_when: false
-      failed_when: false
+    - name: Désactiver temporairement le dépôt Yarn
+      command: mv "{{ yarn_repo_file }}" "{{ yarn_repo_disabled_file }}"
+      when: yarn_repo_stat.stat.exists
+      changed_when: true
 
-    - name: Afficher la sortie standard de apt-get update
-      debug:
-        var: apt_update_result.stdout_lines
-
-    - name: Afficher la sortie d'erreur de apt-get update
-      debug:
-        var: apt_update_result.stderr_lines
-      when: apt_update_result.stderr is defined and apt_update_result.stderr | length > 0
-
-    - name: Arrêter proprement si APT est en erreur
-      fail:
-        msg: |
-          La mise à jour APT a échoué sur la machine cible.
-
-          Code retour : {{ apt_update_result.rc }}
-
-          Cause probable :
-          - dépôt externe mal signé
-          - clé GPG absente
-          - dépôt obsolète ou cassé
-
-          Indices relevés :
-          {{ (apt_update_result.stderr | default(''))[:800] }}
-
-          Action conseillée :
-          - identifier le dépôt fautif dans /etc/apt/sources.list.d/
-          - le désactiver temporairement
-          - relancer ensuite le playbook
-
-          Exemple :
-          sudo mv /etc/apt/sources.list.d/yarn.list /etc/apt/sources.list.d/yarn.list.disabled
-      when: apt_update_result.rc != 0
+    - name: Mettre à jour le cache APT
+      apt:
+        update_cache: true
 
     - name: Installer nginx
       apt:
