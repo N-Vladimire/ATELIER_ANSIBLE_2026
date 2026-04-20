@@ -1,5 +1,5 @@
 ---
-- name: Atelier Ansible dans GitHub Codespaces - version durcie avec remédiation
+- name: Atelier Ansible dans GitHub Codespaces - version DEV / PROD
   hosts: all
   become: yes
   gather_facts: true
@@ -22,23 +22,6 @@
           - "OS : {{ ansible_distribution }} {{ ansible_distribution_version }}"
           - "Python : {{ ansible_python.executable | default('inconnu') }}"
 
-    - name: Installer nginx
-      apt:
-        name: nginx
-        state: present
-        update_cache: yes
-
-    - name: Déployer la page web depuis le template
-      template:
-        src: templates/index.html.j2
-        dest: /var/www/html/index.html
-
-    - name: Démarrer Nginx
-      service:
-        name: nginx
-        state: started
-        enabled: yes
-
     - name: Vérifier si le dépôt Yarn existe
       stat:
         path: "{{ yarn_repo_file }}"
@@ -60,6 +43,11 @@
       apt:
         update_cache: true
 
+    - name: Installer nginx
+      apt:
+        name: nginx
+        state: present
+
     - name: Vérifier que le répertoire web existe
       file:
         path: /var/www/html
@@ -68,9 +56,9 @@
         group: root
         mode: "0755"
 
-    - name: Déployer la page HTML personnalisée
-      copy:
-        src: files/index.html
+    - name: Déployer la page web depuis le template
+      template:
+        src: templates/index.html.j2
         dest: "{{ page_dest }}"
         owner: root
         group: root
@@ -104,7 +92,7 @@
 
     - name: Afficher un extrait du contenu HTTP
       debug:
-        msg: "{{ test_http.content[:200] if test_http.content is defined else 'Aucun contenu retourné' }}"
+        msg: "{{ test_http.content[:300] if test_http.content is defined else 'Aucun contenu retourné' }}"
 
   handlers:
     - name: Redémarrer nginx
